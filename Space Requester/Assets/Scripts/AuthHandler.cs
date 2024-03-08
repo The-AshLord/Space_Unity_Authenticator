@@ -1,305 +1,176 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using TMPro;
 using UnityEngine.Networking;
+using TMPro;
 using System.Linq;
-using UnityEngine.SceneManagement;
 
 public class AuthHandler : MonoBehaviour
 {
-    private TMP_InputField userNameInputField, passwordInputField;
-    public string apiUrl = "https://sid-restapi.onrender.com/api/";
-    
+    private string url = "https://sid-restapi.onrender.com";
 
-    [Header("Local Data")]
-    private string token, username;
+    public string Token { get; set;  }
+    public string Username { get; set; }
 
-    [SerializeField] private GameObject prende;
-
-    [Header("LeaderBoard Data")] 
-    [SerializeField] private TextMeshProUGUI[] scoreUserNames, scoreValues;
-
-    [Header("Update score reference")]
-    [SerializeField] TMP_InputField scoreInputField;
-    
-    [Header("Other references")]
-    [SerializeField] TextMeshProUGUI usernameField;
-    
-    [SerializeField] private GameObject leaderboard, authObj;
-    
+    public GameObject PanelAuth;
     void Start()
     {
-        token = PlayerPrefs.GetString("Token");
-        
-        if(string.IsNullOrEmpty(token)) Debug.Log("No hay token");
+        Token = PlayerPrefs.GetString("token");
+        if (string.IsNullOrEmpty(Token))
+        {
+            Debug.Log("No hay token");
+            PanelAuth.SetActive(true);
+        }
         else
         {
-            username = PlayerPrefs.GetString("Username");
-            StartCoroutine(GetProfile(username));
-        }
-        
-        userNameInputField = GameObject.Find("Username").GetComponent<TMP_InputField>();
-        passwordInputField = GameObject.Find("Password").GetComponent<TMP_InputField>();
-    }
-
-    public void Register()
-    {
-        UserJson authData = new UserJson();
-        authData.username = userNameInputField.text;
-        authData.password = passwordInputField.text;
-
-        string json = JsonUtility.ToJson(authData);
-
-        StartCoroutine(SendRegister(json));
-    }
-    
-    public void Login()
-    {
-        UserJson authData = new UserJson();
-        authData.username = userNameInputField.text;
-        authData.password = passwordInputField.text;
-
-        string json = JsonUtility.ToJson(authData);
-
-        StartCoroutine(SendLogin(json));
-    }
-
-    public void UpdateUserScore()
-    {
-        UserJson user = new UserJson();
-        user.username = username;
-
-        if (int.TryParse(scoreInputField.text, out _))
-        {
-            user.data.score = int.Parse(scoreInputField.text);
-        }
-
-        string postData = JsonUtility.ToJson(user);
-        Debug.Log(postData);
-        StartCoroutine(UpdateScore(postData));
-    }
-    
-    IEnumerator GetProfile(string user)
-    {
-        UnityWebRequest request = UnityWebRequest.Get($"{apiUrl}usuarios/{username}");
-        request.SetRequestHeader("x-token", token);
-
-        yield return request.SendWebRequest();
-        
-        if (request.result == UnityWebRequest.Result.ConnectionError)
-        {
-            Debug.Log("NETWORK ERROR" + request.error);
-        }
-
-        else
-        {
-            Debug.Log(request.downloadHandler.text);
-            if (request.responseCode == 200)
-            {
-                AuthJson data = JsonUtility.FromJson<AuthJson>(request.downloadHandler.text);
-                Debug.Log("Sesion activa con el usuario " + data.usuario.username);
-                Debug.Log("Su score es " + data.data.score);
-                prende.SetActive(true);
-                authObj.SetActive(false);
-                leaderboard.SetActive(true);
-                usernameField.text = data.usuario.username;
-                scoreInputField.text = data.usuario.data.score.ToString();
-                
-                StartCoroutine(RetrieveAndSetScores());
-            }
-            else
-            {
-                Debug.Log(request.error);
-            }
+            Username = PlayerPrefs.GetString("username");
+            StartCoroutine("GetProfile");
         }
     }
-    
-    IEnumerator SendRegister(string json)
+
+    // Update is called once per frame
+    public void enviarRegistro()
     {
-        UnityWebRequest request = UnityWebRequest.Put($"{apiUrl}usuarios", json);
+        AuthData data = new AuthData();
+        data.username = GameObject.Find("InputFieldUsername").GetComponent<TMP_InputField>().text;
+        data.password = GameObject.Find("InputFieldPassword").GetComponent<TMP_InputField>().text;
+
+        StartCoroutine("Registro", JsonUtility.ToJson(data));
+    }
+    public void enviarLogin()
+    {
+        AuthData data = new AuthData();
+        data.username = GameObject.Find("InputFieldUsername").GetComponent<TMP_InputField>().text;
+        data.password = GameObject.Find("InputFieldPassword").GetComponent<TMP_InputField>().text;
+
+        StartCoroutine("Login", JsonUtility.ToJson(data));
+    }
+    IEnumerator Registro(string json)
+    {
+        UnityWebRequest request = UnityWebRequest.Put(url+"/api/usuarios", json);
+        request.method = UnityWebRequest.kHttpVerbPOST;
         request.SetRequestHeader("Content-Type", "application/json");
-        request.method = "POST";
+        Debug.Log("Send Request Registro");
         yield return request.SendWebRequest();
-
-        if (request.isNetworkError)
-        {
-            Debug.Log("NETWORK ERROR" + request.error);
-        }
-
-        else
-        {
-            Debug.Log(request.downloadHandler.text);
-            if (request.responseCode == 200)
-            {
-                UserJson data = JsonUtility.FromJson<UserJson>(request.downloadHandler.text);
-                Debug.Log("Usuario registrado con el ID " + data._id);
-                prende.SetActive(false);
-            }
-            else
-            {
-                Debug.Log(request.error);
-            }
-        }
-    }
-    
-    IEnumerator SendLogin(string json)
-    {
-        UnityWebRequest request = UnityWebRequest.Put(apiUrl + "auth/login", json);
-        request.SetRequestHeader("Content-Type", "application/json");
-        request.method = "POST";
-        yield return request.SendWebRequest();
+        
 
         if (request.result == UnityWebRequest.Result.ConnectionError)
         {
-            Debug.Log("NETWORK ERROR" + request.error);
+            Debug.Log(request.error);
         }
-
         else
         {
+            Debug.Log(request.GetRequestHeader("Content-Type"));
             Debug.Log(request.downloadHandler.text);
+            
             if (request.responseCode == 200)
             {
-                AuthJson data = JsonUtility.FromJson<AuthJson>(request.downloadHandler.text);
-                Debug.Log("Inicio de sesion con el usuario " + data.usuario.username + " y su token " + data.token);
-                
-                PlayerPrefs.SetString("Token", data.token);
-                PlayerPrefs.SetString("Username", data.usuario.username);
-                prende.SetActive(false);
-                authObj.SetActive(false);
-                leaderboard.SetActive(true);
-                
-                
-                usernameField.text = data.usuario.username;
-                StartCoroutine(RetrieveAndSetScores());
+                Debug.Log("Registro exitoso");
+                StartCoroutine("Login", json);
             }
             else
             {
-                Debug.Log(request.error);
+                Debug.Log(request.responseCode + "|" + request.error);
             }
         }
     }
-    
-    IEnumerator RetrieveAndSetScores()
+    IEnumerator Login(string json)
     {
-        leaderboard.SetActive(true);
-        UnityWebRequest www = UnityWebRequest.Get($"{apiUrl}usuarios");
-        www.SetRequestHeader("x-token", token);
-        yield return www.SendWebRequest();
+        UnityWebRequest request = UnityWebRequest.Put(url + "/api/auth/login", json);
+        request.method = UnityWebRequest.kHttpVerbPOST;
+        request.SetRequestHeader("Content-Type", "application/json");
+        Debug.Log("Send Request Login");
+        yield return request.SendWebRequest();
 
-        if (www.result == UnityWebRequest.Result.ConnectionError)
+
+        if (request.result == UnityWebRequest.Result.ConnectionError)
         {
-            Debug.Log("NETWORK ERROR :" + www.error);
+            Debug.Log(request.error);
         }
         else
         {
-            Debug.Log(www.downloadHandler.text);
+            Debug.Log(request.GetRequestHeader("Content-Type"));
+            Debug.Log(request.downloadHandler.text);
 
-            if (www.responseCode == 200)
+            if (request.responseCode == 200)
             {
-                Userlist jsonList = JsonUtility.FromJson<Userlist>(www.downloadHandler.text);
-                Debug.Log(jsonList.usuarios.Count);
+                Debug.Log("Login exitoso");
 
-                foreach (UserJson a in jsonList.usuarios)
-                {
-                    Debug.Log(a.username);
-                }
+                AuthData data = JsonUtility.FromJson<AuthData>(request.downloadHandler.text);
+                Username = data.usuario.username;
+                Token = data.token;
 
-                List<UserJson> list = jsonList.usuarios;
-                List<UserJson> sortedList = list.OrderByDescending(u => u.data.score).ToList<UserJson>();
-
-                int len = scoreUserNames.Length;
-                for (int i = 0; i < len; i++)
-                {
-                    scoreUserNames[i].text = sortedList[i].username;
-                    scoreValues[i].text = sortedList[i].data.score.ToString();
-                }
+                PlayerPrefs.SetString("token", Token);
+                PlayerPrefs.SetString("username", Username);
             }
             else
             {
-                string mensaje = "Status :" + www.responseCode;
-                mensaje += "\ncontent-type:" + www.GetResponseHeader("content-type");
-                mensaje += "\nError :" + www.error;
-                Debug.Log(mensaje);
+                Debug.Log(request.responseCode + "|" + request.error);
+                PanelAuth.SetActive(true);
             }
         }
     }
-    
-    IEnumerator UpdateScore(string postData)
+    IEnumerator GetProfile()
     {
-        UnityWebRequest www = UnityWebRequest.Put($"{apiUrl}usuarios", postData);
+        UnityWebRequest request = UnityWebRequest.Get(url + "/api/usuarios"+Username);
+        request.SetRequestHeader("x-token", Token);
+        Debug.Log("Send Request GetProfile");
+        yield return request.SendWebRequest();
 
-        www.method = "PATCH";
-        www.SetRequestHeader("x-token", token);
-        www.SetRequestHeader("Content-Type", "application/json");
 
-        yield return www.SendWebRequest();
-        if (www.result == UnityWebRequest.Result.ConnectionError)
+        if (request.result == UnityWebRequest.Result.ConnectionError)
         {
-            Debug.Log("NETWORK ERROR :" + www.error);
+            Debug.Log(request.error);
         }
         else
         {
-            Debug.Log(www.downloadHandler.text);
 
-            if (www.responseCode == 200)
+            if (request.responseCode == 200)
             {
+                Debug.Log("Get Profile exitoso");
 
-                AuthJson jsonData = JsonUtility.FromJson<AuthJson>(www.downloadHandler.text);
-                StartCoroutine(RetrieveAndSetScores());
-                Debug.Log(jsonData.usuario.username + " se actualizo " + jsonData.usuario.data.score);
+                AuthData data = JsonUtility.FromJson<AuthData>(request.downloadHandler.text);
+
+                Debug.Log("El Usuario " + data.usuario.username+ " se encuentra autenticado y su puntaje es: " + data.usuario.data.score);
+
+                Usuario[] usuarios = new Usuario[10];
+
+                Usuario[] usuariosOrganizados = usuarios.OrderByDescending(user => user.data.score).Take(5).ToArray();
+            
+            
+            
             }
             else
             {
-                string mensaje = "Status :" + www.responseCode;
-                mensaje += "\ncontent-type:" + www.GetResponseHeader("content-type");
-                mensaje += "\nError :" + www.error;
-                Debug.Log(mensaje);
+                Debug.Log(request.responseCode + "|" + request.error);
             }
-
         }
     }
-}
 
-
-
-[System.Serializable]
-public class UserJson
-{
-    public string _id;
-    public string username;
-    public string password;
-
-    public UserData data;
-
-    public UserJson()
+    [System.Serializable]
+    public class AuthData
     {
-        data = new UserData();
+        public string username;
+        public string password;
+        public Usuario usuario;
+        public string token;
     }
-    public UserJson(string username, string password)
+
+    [System.Serializable]
+    public class Usuario
     {
-        this.username = username;
-        this.password = password;
-        data = new UserData();
+        public string _id;
+        public string username;
+        public UserDataApi data;
+
+        public Usuario()
+        {
+            data = new UserDataApi();
+        }
     }
-}
-
-[System.Serializable]
-public class UserData
-{
-    public int score;
-}
-
-[System.Serializable]
-public class AuthJson
-{
-    public UserJson usuario;
-    public UserData data;
-    public string token;
-}
-
-[System.Serializable]
-public class Userlist
-{
-    public List<UserJson> usuarios;
+    [System.Serializable]
+    public class UserDataApi
+    {
+        public int score;
+    }
 }
