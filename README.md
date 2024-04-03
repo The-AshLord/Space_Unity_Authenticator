@@ -1,2 +1,2 @@
-# Space_Unity_Authenticator
+# Unity Authenticator
 About Integration of a Login authenticator in a basic space Unity project
